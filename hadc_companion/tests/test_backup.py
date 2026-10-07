@@ -159,6 +159,21 @@ class SupervisorBackupClientTests(unittest.TestCase):
         finally:
             response.close()
 
+    def test_integrity_hash_matches_download_bytes(self) -> None:
+        opener = RecordingOpener()
+        client = SupervisorBackupClient(
+            "supervisor-test-token",
+            base_url="http://supervisor.test",
+            opener=opener,
+        )
+        integrity = client.compute_download_sha256("abc123")
+        self.assertEqual("abc123", integrity["slug"])
+        self.assertEqual(12, integrity["size_bytes"])
+        self.assertEqual(
+            "e1ee59dab82bfc4f9772c06b329cbd3e4c98f820c1c9f6d6af88ecb5ee65f327",
+            integrity["sha256"],
+        )
+
     def test_slug_validation_blocks_path_traversal(self) -> None:
         client = SupervisorBackupClient(
             "supervisor-test-token",
