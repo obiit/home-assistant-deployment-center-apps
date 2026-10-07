@@ -47,6 +47,7 @@ class AppContractTests(unittest.TestCase):
         self.assertIn("/usr/local/lib/** mr,", apparmor)
         self.assertIn("/usr/lib/** mr,", apparmor)
         self.assertIn("/lib/** mr,", apparmor)
+        self.assertIn("/opt/hadc-companion/** r,", apparmor)
         self.assertIn("/homeassistant/** r,", apparmor)
         self.assertIn("deny /homeassistant/.storage/** r,", apparmor)
         self.assertNotIn("\n  file,\n", apparmor)
