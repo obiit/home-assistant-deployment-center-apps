@@ -1,4 +1,5 @@
 name: Publish HADC Companion
+# HADC publication contract: version tags are immutable; workflow actions are SHA-pinned.
 
 on:
   push:
