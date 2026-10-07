@@ -1,0 +1,33 @@
+name: HADC Companion
+version: "0.1.0"
+slug: hadc_companion
+description: >-
+  Read-only companion for Home Assistant Deployment Center. Inventories supported
+  Home Assistant configuration sources without exposing secret values.
+url: "https://github.com/obiit/home-assistant-deployment-center-apps/tree/main/hadc_companion"
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: application
+boot: auto
+homeassistant: "2026.4.0"
+apparmor: true
+map:
+  - type: homeassistant_config
+    read_only: true
+    path: /homeassistant
+ports:
+  18091/tcp: 18091
+ports_description:
+  18091/tcp: HADC Companion HTTPS API
+watchdog: "tcp://[HOST]:[PORT:18091]"
+options:
+  scan_interval_minutes: 15
+  pairing_window_minutes: 10
+  max_file_size_kb: 2048
+schema:
+  scan_interval_minutes: "int(1,1440)"
+  pairing_window_minutes: "int(2,60)"
+  max_file_size_kb: "int(64,16384)"
+image: "ghcr.io/obiit/hadc-companion"

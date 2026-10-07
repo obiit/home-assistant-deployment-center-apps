@@ -1,0 +1,12 @@
+configuration:
+  scan_interval_minutes:
+    name: Scan interval
+    description: Minutes between scheduled read-only configuration scans.
+  pairing_window_minutes:
+    name: Pairing window
+    description: Minutes that the pairing code remains valid after App start.
+  max_file_size_kb:
+    name: Maximum file size
+    description: Maximum size in KiB of an individual source file analyzed by the scanner.
+network:
+  18091/TCP: HADC Companion HTTPS API

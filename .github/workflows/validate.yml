@@ -1,0 +1,86 @@
+name: Validate HADC Companion
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Python syntax
+        run: python3 -m compileall -q hadc_companion/hadc_companion hadc_companion/tests
+      - name: Unit tests
+        env:
+          PYTHONPATH: hadc_companion
+        run: python3 -m unittest discover -s hadc_companion/tests -v
+      - name: Repository contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f repository.yaml
+          grep -q 'image: "ghcr.io/obiit/hadc-companion"' hadc_companion/config.yaml
+          grep -q 'read_only: true' hadc_companion/config.yaml
+          ! grep -q '^ARG BUILD_FROM' hadc_companion/Dockerfile
+
+  native-container:
+    needs: unit-tests
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build native image
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\(.*\)"/\1/p' hadc_companion/config.yaml)"
+          docker build --pull --platform "${{ matrix.platform }}"             --build-arg BUILD_VERSION="$version"             --build-arg BUILD_ARCH="${{ matrix.arch }}"             --tag "hadc-companion:validate-${{ matrix.arch }}" hadc_companion
+      - name: Runtime smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/homeassistant .ci/data
+          printf '%s\n' "template:" "  - sensor:" "      - name: CI" "        state: \"{{ states('sensor.ci_temperature') }}\"" > .ci/homeassistant/configuration.yaml
+          docker run -d --name hadc-companion-validate -p 18091:18091             -v "$PWD/.ci/homeassistant:/homeassistant:ro"             -v "$PWD/.ci/data:/data" "hadc-companion:validate-${{ matrix.arch }}"
+          cleanup() { docker logs hadc-companion-validate || true; docker rm -f hadc-companion-validate >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          ok=0
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error --insecure https://127.0.0.1:18091/health > .ci/health.json; then ok=1; break; fi
+            sleep 1
+          done
+          test "$ok" = "1"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          h=json.loads(Path(".ci/health.json").read_text())
+          assert h["status"]=="healthy", h
+          assert h["version"]=="0.1.0", h
+          assert h["protocol_version"]==1, h
+          assert h["data_schema_version"]==1, h
+          assert h["config_access"]=="READ_ONLY", h
+          PY
+          if docker exec hadc-companion-validate sh -c 'touch /homeassistant/.hadc-write-probe'; then
+            echo "ERROR: read-only Home Assistant mount accepted a write." >&2
+            exit 1
+          fi

@@ -1,0 +1,31 @@
+#include <tunables/global>
+
+profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  signal,
+  network inet stream,
+  network inet6 stream,
+
+  /bin/** rix,
+  /usr/bin/** rix,
+  /usr/local/bin/** rix,
+  /usr/lib/** r,
+  /usr/local/lib/** r,
+  /lib/** r,
+  /etc/ssl/** r,
+  /etc/passwd r,
+  /etc/group r,
+  /proc/sys/crypto/fips_enabled r,
+  /dev/null rw,
+  /dev/urandom r,
+  /tmp/** rwk,
+  /run/** rwk,
+
+  /data/** rwk,
+
+  /homeassistant/ r,
+  /homeassistant/** r,
+  deny /homeassistant/.storage/ r,
+  deny /homeassistant/.storage/** r,
+}
