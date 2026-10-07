@@ -2,6 +2,17 @@
 
 ## 0.1.2
 
+AppArmor runtime compatibility fix.
+
+- Grants explicit read+execute access to S6 shell-script paths under `/package/**` and `/command/**`.
+- Restores explicit S6 service/init directory rules alongside the current `/etc/s6-overlay/**` paths.
+- Keeps the broad AppArmor `file,` permission deliberately disabled.
+- Adds CI coverage intended to start the container under the actual custom AppArmor profile, catching Supervisor-only startup denials before release.
+- Home Assistant configuration remains read-only and `.storage` remains explicitly denied.
+- Protocol remains v1 and persistent data schema remains v1.
+
+## 0.1.2
+
 S6 shell-script read compatibility fix.
 
 - Allows S6 package and command scripts to be read as well as executed under AppArmor.

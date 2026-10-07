@@ -87,3 +87,105 @@ jobs:
             echo "ERROR: read-only Home Assistant mount accepted a write." >&2
             exit 1
           fi
+
+
+  apparmor-runtime:
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Ensure AppArmor tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v apparmor_parser >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y apparmor-utils
+          fi
+          sudo apparmor_parser --version
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\(.*\)"/\1/p' hadc_companion/config.yaml)"
+          docker build --pull --platform linux/amd64 \
+            --build-arg BUILD_VERSION="$version" \
+            --build-arg BUILD_ARCH=amd64 \
+            --tag hadc-companion:apparmor hadc_companion
+
+      - name: Load HADC AppArmor profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apparmor_parser -r -W hadc_companion/apparmor.txt
+          sudo apparmor_status | grep -F "hadc_companion"
+
+      - name: Start container under HADC AppArmor profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-apparmor/homeassistant .ci-apparmor/data
+          # Supervisor provides /data as the App's writable persistent mount.
+          # Make the CI bind mount writable without granting dac_override.
+          chmod 0777 .ci-apparmor/data
+          printf '%s\n' \
+            "template:" \
+            "  - sensor:" \
+            "      - name: CI" \
+            "        state: \"{{ states('sensor.ci_temperature') }}\"" \
+            > .ci-apparmor/homeassistant/configuration.yaml
+
+          docker run -d \
+            --name hadc-companion-apparmor \
+            --security-opt apparmor=hadc_companion \
+            -p 18092:18091 \
+            -v "$PWD/.ci-apparmor/homeassistant:/homeassistant:ro" \
+            -v "$PWD/.ci-apparmor/data:/data" \
+            hadc-companion:apparmor
+
+          diagnostics() {
+            echo "=== Container logs ==="
+            docker logs hadc-companion-apparmor || true
+            echo "=== Recent AppArmor kernel events ==="
+            sudo journalctl -k --since "3 minutes ago" --no-pager | grep -Ei 'apparmor|DENIED' || true
+          }
+
+          cleanup() {
+            docker rm -f hadc-companion-apparmor >/dev/null 2>&1 || true
+            sudo apparmor_parser -R hadc_companion/apparmor.txt >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          sleep 2
+          if ! docker ps --filter "name=^/hadc-companion-apparmor$" --format '{{.Names}}' | grep -qx hadc-companion-apparmor; then
+            diagnostics
+            exit 1
+          fi
+
+          ok=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --insecure https://127.0.0.1:18092/health > .ci-apparmor/health.json; then
+              ok=1
+              break
+            fi
+            if ! docker ps --filter "name=^/hadc-companion-apparmor$" --format '{{.Names}}' | grep -qx hadc-companion-apparmor; then
+              diagnostics
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            diagnostics
+            exit 1
+          fi
+
+          if docker exec hadc-companion-apparmor sh -c 'touch /homeassistant/.hadc-write-probe'; then
+            echo "ERROR: AppArmor/runtime combination allowed Home Assistant config write." >&2
+            exit 1
+          fi
+
+          echo "Custom AppArmor runtime startup: PASS"
