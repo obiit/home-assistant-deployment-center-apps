@@ -54,6 +54,8 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version: "\(.*\)"/\1/p' hadc_companion/config.yaml)"
+          test -n "$version"
+          echo "$version" > .ci-version
           docker build --pull --platform "${{ matrix.platform }}"             --build-arg BUILD_VERSION="$version"             --build-arg BUILD_ARCH="${{ matrix.arch }}"             --tag "hadc-companion:validate-${{ matrix.arch }}" hadc_companion
       - name: Runtime smoke test
         shell: bash
@@ -70,12 +72,13 @@ jobs:
             sleep 1
           done
           test "$ok" = "1"
-          python3 - <<'PY'
+          EXPECTED_VERSION="$(cat .ci-version)" python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
           h=json.loads(Path(".ci/health.json").read_text())
           assert h["status"]=="healthy", h
-          assert h["version"]=="0.1.0", h
+          assert h["version"]==os.environ["EXPECTED_VERSION"], h
           assert h["protocol_version"]==1, h
           assert h["data_schema_version"]==1, h
           assert h["config_access"]=="READ_ONLY", h

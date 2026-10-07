@@ -2,12 +2,12 @@
 
 Read-only server-side component for Home Assistant Deployment Center.
 
-- App version: **0.1.0**
+- App version: **0.1.1**
 - Protocol version: **1**
 - Persistent data schema: **1**
 - Architectures: **amd64**, **aarch64**
 - Home Assistant configuration access: **read-only**
-- Image: `ghcr.io/obiit/hadc-companion:0.1.0`
+- Image: `ghcr.io/obiit/hadc-companion:0.1.1`
 
 The App does not request Supervisor API, Home Assistant API, Docker API, host networking, privileged Linux capabilities or full host access.
 
