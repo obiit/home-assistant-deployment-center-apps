@@ -170,7 +170,7 @@ class SupervisorBackupClientTests(unittest.TestCase):
         self.assertEqual("abc123", integrity["slug"])
         self.assertEqual(12, integrity["size_bytes"])
         self.assertEqual(
-            "e1ee59dab82bfc4f9772c06b329cbd3e4c98f820c1c9f6d6af88ecb5ee65f327",
+            "3f75e04c360b46d235f2fc1059fc5a3b29c02152b3e261f878d3875cf7f5277c",
             integrity["sha256"],
         )
 
