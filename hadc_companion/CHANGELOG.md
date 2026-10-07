@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3
+
+Verified AppArmor runtime compatibility release.
+
+- Includes the complete S6/AppArmor fixes validated under the actual custom AppArmor profile.
+- Explicit read+execute access for S6 script paths.
+- Executable mmap permission for Python/shared libraries.
+- Read-only access to Companion application code.
+- Precise persistent `/data` permissions without granting `dac_override`.
+- S6 directory-read rules without the broad AppArmor `file,` permission.
+- CI loads the custom AppArmor profile, starts the container under it, verifies HTTPS `/health`, and verifies Home Assistant config remains read-only.
+- Native amd64 and aarch64 container smoke tests remain required.
+- Protocol remains v1; persistent data schema remains v1.
+
 ## 0.1.2
 
 AppArmor runtime compatibility fix.
