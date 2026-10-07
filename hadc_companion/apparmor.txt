@@ -42,6 +42,7 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
 
   # Companion persistent lifecycle state.
   /data/ rw,
+  /data/tls w,
   /data/tls/ rwk,
   /data/**/ rwk,
   /data/** rwk,
