@@ -1,0 +1,123 @@
+name: Publish HADC Companion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hadc_companion/**"
+      - "repository.yaml"
+      - ".github/workflows/publish.yml"
+  workflow_dispatch:
+
+env:
+  ARCHITECTURES: '["amd64", "aarch64"]'
+  IMAGE_NAME: hadc-companion
+
+permissions:
+  contents: read
+
+jobs:
+  init:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Read and validate App version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\(.*\)"/\1/p' hadc_companion/config.yaml)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          grep -q 'image: "ghcr.io/obiit/hadc-companion"' hadc_companion/config.yaml
+          ! grep -q '^ARG BUILD_FROM' hadc_companion/Dockerfile
+      - name: Unit tests before publish
+        env:
+          PYTHONPATH: hadc_companion
+        run: |
+          python3 -m compileall -q hadc_companion/hadc_companion hadc_companion/tests
+          python3 -m unittest discover -s hadc_companion/tests -v
+      - name: Prepare native build matrix
+        id: matrix
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@7412f0023ea9b6e58e8bb5059f1660f51376f49a
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          image-name: ${{ env.IMAGE_NAME }}
+
+  build:
+    name: Build and sign ${{ matrix.arch }}
+    needs: init
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.init.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build, publish and sign architecture image
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a
+        with:
+          arch: ${{ matrix.arch }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: hadc_companion
+          image: ${{ matrix.image }}
+          image-tags: |
+            ${{ needs.init.outputs.version }}
+            latest
+          push: "true"
+          cosign: "true"
+          skip-existing: ${{ needs.init.outputs.version }}
+          version: ${{ needs.init.outputs.version }}
+
+  manifest:
+    name: Publish and sign multi-arch manifest
+    needs: [init, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+      id-token: write
+    steps:
+      - name: Publish generic image manifest
+        uses: home-assistant/builder/actions/publish-multi-arch-manifest@7412f0023ea9b6e58e8bb5059f1660f51376f49a
+        with:
+          architectures: ${{ env.ARCHITECTURES }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          image-name: ${{ env.IMAGE_NAME }}
+          image-tags: |
+            ${{ needs.init.outputs.version }}
+            latest
+          cosign: "true"
+          skip-existing: ${{ needs.init.outputs.version }}
+
+  verify-public:
+    name: Verify anonymous multi-arch pull
+    needs: [init, manifest]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Verify published image without registry credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/obiit/hadc-companion:${{ needs.init.outputs.version }}"
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          docker buildx imagetools inspect "$image"
+          docker buildx imagetools inspect --raw "$image" > manifest.json
+          python3 - <<'PY'
+          import json
+          with open("manifest.json", encoding="utf-8") as f:
+              manifest=json.load(f)
+          platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in manifest.get("manifests",[])}
+          assert ("linux","amd64") in platforms, platforms
+          assert ("linux","arm64") in platforms, platforms
+          print("Anonymous multi-arch manifest verification: PASS")
+          PY

@@ -1,0 +1,12 @@
+configuration:
+  scan_interval_minutes:
+    name: Skanningsintervall
+    description: Minuter mellan schemalagda skrivskyddade konfigurationsskanningar.
+  pairing_window_minutes:
+    name: Pairingfönster
+    description: Antal minuter som pairingkoden är giltig efter att appen startat.
+  max_file_size_kb:
+    name: Maximal filstorlek
+    description: Maximal storlek i KiB för en enskild källfil som analyseras.
+network:
+  18091/TCP: HADC Companion HTTPS-API
