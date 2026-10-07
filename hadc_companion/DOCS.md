@@ -1,4 +1,4 @@
-# HADC Companion 0.1.0
+# HADC Companion 0.1.1
 
 HADC Companion closes Home Assistant filesystem visibility gaps while remaining read-only.
 
