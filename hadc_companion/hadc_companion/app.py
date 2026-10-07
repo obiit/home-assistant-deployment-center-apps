@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from . import APP_VERSION, DATA_SCHEMA_VERSION, PROTOCOL_VERSION
+from .backup import SupervisorBackupClient, SupervisorBackupError
 from .scanner import ConfigScanner
 from .state import StateStore
 from .tls import ensure_tls_material
@@ -104,6 +105,7 @@ class CompanionContext:
         scan_interval_minutes: int,
         pairing_window_minutes: int,
         certificate_sha256: str,
+        supervisor_token: str | None,
     ) -> None:
         self.config_root = config_root
         self.data_root = data_root
@@ -111,6 +113,7 @@ class CompanionContext:
         self.state = StateStore(data_root)
         self.pairing = PairingManager(self.state, pairing_window_minutes)
         self.certificate_sha256 = certificate_sha256
+        self.backups = SupervisorBackupClient(supervisor_token) if supervisor_token else None
         self.scan_interval_seconds = scan_interval_minutes * 60
         self.inventory_path = data_root / "latest-inventory.json"
         self._scan_lock = threading.Lock()
@@ -183,7 +186,8 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
         _LOGGER.info("%s - %s", self.client_address[0], format % args)
 
     def do_GET(self) -> None:
-        if self.path == "/health":
+        path = self.path.split("?", 1)[0]
+        if path == "/health":
             inventory = self.server.context.latest_inventory()
             self._json(
                 HTTPStatus.OK,
@@ -195,6 +199,7 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
                     "config_access": "READ_ONLY",
                     "inventory_status": inventory["status"],
                     "latest_scan_at": inventory["captured_at"],
+                    "backup_checkpoint_available": self.server.context.backups is not None,
                 },
             )
             return
@@ -202,7 +207,7 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
         if not self._require_auth():
             return
 
-        if self.path == "/api/v1/info":
+        if path == "/api/v1/info":
             inventory = self.server.context.latest_inventory()
             self._json(
                 HTTPStatus.OK,
@@ -215,6 +220,11 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
                     "paired": self.server.context.state.is_paired,
                     "pairing_window_active": self.server.context.pairing.is_active(),
                     "certificate_sha256": self.server.context.certificate_sha256,
+                    "capabilities": {
+                        "filesystem_inventory_v1": True,
+                        "backup_checkpoint_v1": self.server.context.backups is not None,
+                    },
+                    "supervisor_access": "BACKUP_ROLE_ONLY" if self.server.context.backups is not None else "UNAVAILABLE",
                     "inventory": {
                         "schema": inventory["schema"],
                         "status": inventory["status"],
@@ -225,11 +235,11 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if self.path == "/api/v1/inventory":
+        if path == "/api/v1/inventory":
             self._json(HTTPStatus.OK, self.server.context.latest_inventory())
             return
 
-        if self.path == "/api/v1/coverage":
+        if path == "/api/v1/coverage":
             inventory = self.server.context.latest_inventory()
             self._json(
                 HTTPStatus.OK,
@@ -242,10 +252,41 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/backups":
+            if not self._require_backup_capability():
+                return
+            try:
+                backups = self.server.context.backups.list_backups()
+            except SupervisorBackupError as exc:
+                self._supervisor_error(exc)
+                return
+            self._json(HTTPStatus.OK, {"backups": backups})
+            return
+
+        if path.startswith("/api/v1/backups/") and path.endswith("/info"):
+            if not self._require_backup_capability():
+                return
+            slug = path[len("/api/v1/backups/") : -len("/info")].strip("/")
+            try:
+                backup = self.server.context.backups.get_backup(slug)
+            except (SupervisorBackupError, ValueError) as exc:
+                self._backup_error(exc)
+                return
+            self._json(HTTPStatus.OK, {"backup": backup})
+            return
+
+        if path.startswith("/api/v1/backups/") and path.endswith("/download"):
+            if not self._require_backup_capability():
+                return
+            slug = path[len("/api/v1/backups/") : -len("/download")].strip("/")
+            self._stream_backup(slug)
+            return
+
         self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Endpoint not found.")
 
     def do_POST(self) -> None:
-        if self.path == "/api/v1/pair":
+        path = self.path.split("?", 1)[0]
+        if path == "/api/v1/pair":
             try:
                 payload = self._read_json()
             except ValueError as exc:
@@ -280,7 +321,7 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
         if not self._require_auth():
             return
 
-        if self.path == "/api/v1/scan":
+        if path == "/api/v1/scan":
             try:
                 inventory = self.server.context.run_scan()
             except Exception as exc:
@@ -298,6 +339,46 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/checkpoints":
+            if not self._require_backup_capability():
+                return
+            try:
+                payload = self._read_json()
+                name = payload.get("name")
+                password = payload.get("password")
+                if not isinstance(name, str):
+                    raise ValueError("Checkpoint name is required.")
+                if not isinstance(password, str):
+                    raise ValueError("Checkpoint password is required.")
+                backup = self.server.context.backups.create_full_backup(name, password)
+            except ValueError as exc:
+                self._error(HTTPStatus.BAD_REQUEST, "CHECKPOINT_REQUEST_INVALID", str(exc))
+                return
+            except SupervisorBackupError as exc:
+                _LOGGER.exception("Supervisor checkpoint creation failed.")
+                self._supervisor_error(exc)
+                return
+
+            _LOGGER.info(
+                "Protected full Home Assistant checkpoint created: %s.",
+                backup.get("slug", "<unknown>"),
+            )
+            self._json(
+                HTTPStatus.CREATED,
+                {
+                    "status": "CREATED",
+                    "backup": backup,
+                    "policy": {
+                        "type": "full",
+                        "compressed": True,
+                        "local_supervisor_storage": True,
+                        "database_included": True,
+                        "password_required": True,
+                    },
+                },
+            )
+            return
+
         self._error(HTTPStatus.NOT_FOUND, "NOT_FOUND", "Endpoint not found.")
 
     def _require_auth(self) -> bool:
@@ -307,6 +388,59 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Valid Companion bearer token required.")
             return False
         return True
+
+    def _require_backup_capability(self) -> bool:
+        if self.server.context.backups is None:
+            self._error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "BACKUP_CAPABILITY_UNAVAILABLE",
+                "Companion does not have the Home Assistant Supervisor backup role.",
+            )
+            return False
+        return True
+
+    def _stream_backup(self, slug: str) -> None:
+        try:
+            response = self.server.context.backups.open_download(slug)
+        except (SupervisorBackupError, ValueError) as exc:
+            self._backup_error(exc)
+            return
+
+        try:
+            length = response.headers.get("Content-Length")
+            self.send_response(HTTPStatus.OK.value)
+            self.send_header("Content-Type", "application/x-tar")
+            if length:
+                self.send_header("Content-Length", length)
+            self.send_header(
+                "Content-Disposition",
+                f'attachment; filename="home-assistant-backup-{slug}.tar"',
+            )
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+        finally:
+            response.close()
+
+    def _backup_error(self, exc: Exception) -> None:
+        if isinstance(exc, SupervisorBackupError):
+            self._supervisor_error(exc)
+            return
+        self._error(HTTPStatus.BAD_REQUEST, "BACKUP_REQUEST_INVALID", str(exc))
+
+    def _supervisor_error(self, exc: SupervisorBackupError) -> None:
+        status = (
+            HTTPStatus.SERVICE_UNAVAILABLE
+            if exc.code == "SUPERVISOR_UNREACHABLE"
+            else HTTPStatus.BAD_GATEWAY
+        )
+        self._error(status, exc.code, str(exc))
 
     def _read_json(self) -> dict[str, Any]:
         raw_length = self.headers.get("Content-Length", "0")
@@ -352,6 +486,7 @@ def run() -> None:
     data_root = Path(os.environ.get("HADC_DATA_ROOT", "/data"))
     listen_host = os.environ.get("HADC_LISTEN_HOST", "0.0.0.0")
     listen_port = int(os.environ.get("HADC_LISTEN_PORT", "18091"))
+    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
 
     data_root.mkdir(parents=True, exist_ok=True)
     options = load_options(data_root)
@@ -364,6 +499,7 @@ def run() -> None:
         scan_interval_minutes=options["scan_interval_minutes"],
         pairing_window_minutes=options["pairing_window_minutes"],
         certificate_sha256=certificate_fingerprint,
+        supervisor_token=supervisor_token,
     )
 
     _LOGGER.info(
@@ -373,6 +509,10 @@ def run() -> None:
         DATA_SCHEMA_VERSION,
     )
     _LOGGER.info("TLS certificate SHA-256: %s", certificate_fingerprint)
+    _LOGGER.info(
+        "Supervisor backup capability: %s.",
+        "BACKUP_ROLE_ONLY" if context.backups is not None else "UNAVAILABLE",
+    )
     _LOGGER.warning(
         "PAIRING CODE: %s · valid for %s minutes. Pairing rotates any existing Desktop token.",
         context.pairing.code,
