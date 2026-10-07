@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3
+
+AppArmor runtime completeness and CI hardening.
+
+- Grants read access to the Python application source under `/opt/hadc-companion`.
+- Keeps S6 package/command script paths readable and executable.
+- Prunes excluded directories such as `.storage` before filesystem traversal.
+- Adds CI validation intended to run the container with the actual custom AppArmor profile.
+- Keeps Home Assistant configuration read-only; protocol remains v1 and data schema remains v1.
+
 ## 0.1.2
 
 S6 shell-script read compatibility fix.
