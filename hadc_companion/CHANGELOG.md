@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+S6 preinit AppArmor compatibility fix.
+
+- Allows read + execute access for the S6 package and command trees used by `/init`.
+- Fixes Supervisor startup denial for `/package/admin/s6-overlay-*/libexec/preinit`.
+- Keeps `homeassistant_config` read-only and preserves explicit `.storage` deny rules.
+- Protocol remains v1 and persistent data schema remains v1.
+
 ## 0.1.3
 
 Verified AppArmor runtime compatibility release.
