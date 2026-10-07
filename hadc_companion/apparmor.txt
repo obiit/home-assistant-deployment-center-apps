@@ -7,16 +7,20 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   network inet stream,
   network inet6 stream,
 
-  # Home Assistant supported S6-Overlay baseline.
-  # Keep this block aligned with the current Home Assistant AppArmor guidance.
+  # S6 Overlay startup/runtime. We intentionally do NOT use the broad
+  # AppArmor "file," rule from the generic example profile, so read
+  # permissions for shell scripts must be explicit here.
   /init rix,
-  /bin/** ix,
-  /usr/bin/** ix,
-  /usr/local/bin/** ix,
-  /run/{s6,s6-rc*,service}/** ix,
+  /bin/** rix,
+  /usr/bin/** rix,
+  /usr/local/bin/** rix,
+  /run/{s6,s6-rc*,service}/** rix,
   /package/** rix,
   /command/** rix,
   /etc/s6-overlay/** rwix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
   /run/{,**} rwk,
   /dev/tty rw,
 
@@ -35,8 +39,8 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   # Companion persistent lifecycle state.
   /data/** rwk,
 
-  # Home Assistant configuration is read-only by both Docker mount
-  # and AppArmor. Internal storage remains explicitly denied.
+  # Home Assistant configuration stays read-only at both the Docker
+  # mount and AppArmor layers. Internal storage remains denied.
   /homeassistant/ r,
   /homeassistant/** r,
   deny /homeassistant/.storage/ r,
