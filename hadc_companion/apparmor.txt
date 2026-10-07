@@ -7,9 +7,20 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   network inet stream,
   network inet6 stream,
 
-  /bin/** rix,
-  /usr/bin/** rix,
-  /usr/local/bin/** rix,
+  # Home Assistant base image / S6 Overlay startup.
+  # Keep these aligned with the supported Home Assistant AppArmor pattern.
+  /init rix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /usr/local/bin/** ix,
+  /etc/s6/** rix,
+  /run/s6/** rwix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/** rwk,
+
+  # Python runtime and shared libraries.
   /usr/lib/** r,
   /usr/local/lib/** r,
   /lib/** r,
@@ -20,10 +31,12 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   /dev/null rw,
   /dev/urandom r,
   /tmp/** rwk,
-  /run/** rwk,
 
+  # Companion persistent lifecycle state.
   /data/** rwk,
 
+  # Home Assistant configuration is read-only by both Docker mount
+  # and AppArmor. Internal storage remains explicitly denied.
   /homeassistant/ r,
   /homeassistant/** r,
   deny /homeassistant/.storage/ r,
