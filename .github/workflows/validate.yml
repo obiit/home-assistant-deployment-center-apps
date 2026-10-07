@@ -23,6 +23,14 @@ jobs:
         env:
           PYTHONPATH: hadc_companion
         run: python3 -m unittest discover -s hadc_companion/tests -v
+      - name: AppArmor syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apparmor-utils
+          sudo apparmor_parser --skip-kernel-load hadc_companion/apparmor.txt
+
       - name: Repository contract
         shell: bash
         run: |
@@ -85,5 +93,73 @@ jobs:
           PY
           if docker exec hadc-companion-validate sh -c 'touch /homeassistant/.hadc-write-probe'; then
             echo "ERROR: read-only Home Assistant mount accepted a write." >&2
+            exit 1
+          fi
+
+
+  apparmor-runtime:
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Verify host AppArmor support
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker info --format '{{json .SecurityOptions}}' | tee security-options.json
+          grep -q 'apparmor' security-options.json
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apparmor-utils
+          sudo apparmor_parser -r hadc_companion/apparmor.txt
+
+      - name: Build amd64 image
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: "\(.*\)"/\1/p' hadc_companion/config.yaml)"
+          docker build --pull --platform linux/amd64             --build-arg BUILD_VERSION="$version"             --build-arg BUILD_ARCH=amd64             --tag hadc-companion:apparmor-ci hadc_companion
+
+      - name: Start under custom AppArmor profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-apparmor/homeassistant/.storage .ci-apparmor/data
+          printf '%s\n' "template:" "  - sensor:" "      - name: CI" "        state: \"{{ states('sensor.ci_temperature') }}\"" > .ci-apparmor/homeassistant/configuration.yaml
+          printf '%s\n' '{"must_not_be_read":true}' > .ci-apparmor/homeassistant/.storage/core.config
+
+          docker run -d             --name hadc-companion-apparmor             --security-opt apparmor=hadc_companion             -p 18092:18091             -v "$PWD/.ci-apparmor/homeassistant:/homeassistant:ro"             -v "$PWD/.ci-apparmor/data:/data"             hadc-companion:apparmor-ci
+
+          cleanup() {
+            docker logs hadc-companion-apparmor || true
+            docker rm -f hadc-companion-apparmor >/dev/null 2>&1 || true
+            sudo apparmor_parser -R hadc_companion/apparmor.txt >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          ok=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --insecure https://127.0.0.1:18092/health > .ci-apparmor/health.json; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ok" = "1"
+
+          EXPECTED_VERSION="$(sed -n 's/^version: "\(.*\)"/\1/p' hadc_companion/config.yaml)" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          h=json.loads(Path(".ci-apparmor/health.json").read_text())
+          assert h["status"]=="healthy", h
+          assert h["version"]==os.environ["EXPECTED_VERSION"], h
+          assert h["config_access"]=="READ_ONLY", h
+          PY
+
+          if docker exec hadc-companion-apparmor sh -c 'cat /homeassistant/.storage/core.config'; then
+            echo "ERROR: AppArmor allowed .storage read." >&2
             exit 1
           fi
