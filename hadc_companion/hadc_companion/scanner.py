@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,10 +68,21 @@ class ConfigScanner:
         if not self.root.exists() or not self.root.is_dir():
             return self._unavailable(captured_at, "CONFIG_ROOT_MISSING", str(self.root))
 
-        candidates = sorted(
-            (path for path in self.root.rglob("*") if path.is_file() or path.is_symlink()),
-            key=lambda item: item.as_posix(),
-        )
+        candidates: list[Path] = []
+        for current_root, dir_names, file_names in os.walk(
+            self.root,
+            topdown=True,
+            followlinks=False,
+        ):
+            # Prune excluded directories before os.walk attempts to enter them.
+            # This is required because .storage is denied by AppArmor and must
+            # never be traversed merely to discover that it should be excluded.
+            dir_names[:] = sorted(
+                name for name in dir_names if name not in EXCLUDED_DIRECTORIES
+            )
+            current_path = Path(current_root)
+            for file_name in sorted(file_names):
+                candidates.append(current_path / file_name)
 
         for path in candidates:
             relative = self._relative_or_none(path)
