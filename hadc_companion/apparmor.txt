@@ -42,6 +42,7 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
 
   # Companion persistent lifecycle state.
   /data/ rw,
+  /data/**/ rwk,
   /data/** rwk,
 
   # Home Assistant configuration stays read-only at both the Docker
