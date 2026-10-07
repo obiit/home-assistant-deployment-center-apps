@@ -36,6 +36,10 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   /dev/urandom r,
   /tmp/** rwk,
 
+  # Companion application code is immutable at runtime.
+  /opt/hadc-companion/ r,
+  /opt/hadc-companion/** r,
+
   # Companion persistent lifecycle state.
   /data/** rwk,
 
