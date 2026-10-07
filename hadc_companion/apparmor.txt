@@ -7,18 +7,18 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   network inet stream,
   network inet6 stream,
 
-  # Home Assistant base image / S6 Overlay startup.
-  # Keep these aligned with the supported Home Assistant AppArmor pattern.
+  # Home Assistant supported S6-Overlay baseline.
+  # Keep this block aligned with the current Home Assistant AppArmor guidance.
   /init rix,
   /bin/** ix,
   /usr/bin/** ix,
   /usr/local/bin/** ix,
-  /etc/s6/** rix,
-  /run/s6/** rwix,
-  /etc/services.d/** rwix,
-  /etc/cont-init.d/** rwix,
-  /etc/cont-finish.d/** rwix,
-  /run/** rwk,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/s6-overlay/** rwix,
+  /run/{,**} rwk,
+  /dev/tty rw,
 
   # Python runtime and shared libraries.
   /usr/lib/** r,
