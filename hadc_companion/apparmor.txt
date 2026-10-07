@@ -25,9 +25,9 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   /dev/tty rw,
 
   # Python runtime and shared libraries.
-  /usr/lib/** r,
-  /usr/local/lib/** r,
-  /lib/** r,
+  /usr/lib/** mr,
+  /usr/local/lib/** mr,
+  /lib/** mr,
   /etc/ssl/** r,
   /etc/passwd r,
   /etc/group r,
