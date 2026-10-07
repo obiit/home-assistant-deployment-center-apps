@@ -129,6 +129,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .ci-apparmor/homeassistant .ci-apparmor/data
+          # Supervisor provides /data as the App's writable persistent mount.
+          # Make the CI bind mount writable without granting dac_override.
+          chmod 0777 .ci-apparmor/data
           printf '%s\n' \
             "template:" \
             "  - sensor:" \
