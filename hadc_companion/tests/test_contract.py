@@ -12,10 +12,10 @@ class AppContractTests(unittest.TestCase):
         config = (app_root / "config.yaml").read_text(encoding="utf-8")
         apparmor = (app_root / "apparmor.txt").read_text(encoding="utf-8")
 
-        self.assertEqual("0.1.1", APP_VERSION)
+        self.assertEqual("0.1.2", APP_VERSION)
         self.assertEqual(1, PROTOCOL_VERSION)
         self.assertEqual(1, DATA_SCHEMA_VERSION)
-        self.assertIn('version: "0.1.1"', config)
+        self.assertIn('version: "0.1.2"', config)
         self.assertIn("read_only: true", config)
         self.assertIn("type: homeassistant_config", config)
         self.assertIn('watchdog: "tcp://[HOST]:[PORT:18091]"', config)
@@ -37,8 +37,8 @@ class AppContractTests(unittest.TestCase):
         # ordinary Docker smoke tests cannot reproduce.
         self.assertIn("/init rix,", apparmor)
         self.assertIn("/run/{s6,s6-rc*,service}/** ix,", apparmor)
-        self.assertIn("/package/** ix,", apparmor)
-        self.assertIn("/command/** ix,", apparmor)
+        self.assertIn("/package/** rix,", apparmor)
+        self.assertIn("/command/** rix,", apparmor)
         self.assertIn("/etc/s6-overlay/** rwix,", apparmor)
         self.assertIn("/run/{,**} rwk,", apparmor)
         self.assertIn("/homeassistant/** r,", apparmor)

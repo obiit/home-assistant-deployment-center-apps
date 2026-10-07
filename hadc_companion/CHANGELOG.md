@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+S6 shell-script read compatibility fix.
+
+- Allows S6 package and command scripts to be read as well as executed under AppArmor.
+- Fixes Supervisor startup failure `/bin/sh: can't open '/package/admin/s6-overlay-3.2.3.0/libexec/preinit': Permission denied`.
+- Keeps Home Assistant configuration read-only and preserves explicit `.storage` deny rules.
+- Protocol remains v1 and persistent data schema remains v1.
+
 ## 0.1.1
 
 Startup compatibility fix.

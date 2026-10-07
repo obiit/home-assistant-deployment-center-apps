@@ -2,7 +2,7 @@
 
 Public Home Assistant App repository for **Home Assistant Deployment Center**.
 
-## HADC Companion 0.1.1
+## HADC Companion 0.1.2
 
 Read-only server-side evidence component.
 
