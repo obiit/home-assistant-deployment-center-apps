@@ -40,6 +40,8 @@ class AppContractTests(unittest.TestCase):
         self.assertIn("/package/** rix,", apparmor)
         self.assertIn("/command/** rix,", apparmor)
         self.assertIn("/etc/s6-overlay/** rwix,", apparmor)
+        self.assertIn("/etc/fix-attrs.d/ r,", apparmor)
+        self.assertIn("/etc/services.d/ r,", apparmor)
         self.assertIn("/etc/services.d/** rwix,", apparmor)
         self.assertIn("/etc/cont-init.d/** rwix,", apparmor)
         self.assertIn("/etc/cont-finish.d/** rwix,", apparmor)
@@ -56,6 +58,7 @@ class AppContractTests(unittest.TestCase):
         self.assertIn("/homeassistant/** r,", apparmor)
         self.assertIn("deny /homeassistant/.storage/** r,", apparmor)
         self.assertNotIn("\n  file,\n", apparmor)
+        self.assertNotIn("capability dac_override", apparmor)
 
 
 if __name__ == "__main__":
