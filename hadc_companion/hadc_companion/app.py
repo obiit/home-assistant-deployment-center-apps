@@ -275,6 +275,18 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.OK, {"backup": backup})
             return
 
+        if path.startswith("/api/v1/backups/") and path.endswith("/integrity"):
+            if not self._require_backup_capability():
+                return
+            slug = path[len("/api/v1/backups/") : -len("/integrity")].strip("/")
+            try:
+                integrity = self.server.context.backups.compute_download_sha256(slug)
+            except (SupervisorBackupError, ValueError) as exc:
+                self._backup_error(exc)
+                return
+            self._json(HTTPStatus.OK, {"integrity": integrity})
+            return
+
         if path.startswith("/api/v1/backups/") and path.endswith("/download"):
             if not self._require_backup_capability():
                 return
