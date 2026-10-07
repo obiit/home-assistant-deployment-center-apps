@@ -144,22 +144,41 @@ jobs:
             -v "$PWD/.ci-apparmor/data:/data" \
             hadc-companion:apparmor
 
-          cleanup() {
+          diagnostics() {
+            echo "=== Container logs ==="
             docker logs hadc-companion-apparmor || true
+            echo "=== Recent AppArmor kernel events ==="
+            sudo journalctl -k --since "3 minutes ago" --no-pager | grep -Ei 'apparmor|DENIED' || true
+          }
+
+          cleanup() {
             docker rm -f hadc-companion-apparmor >/dev/null 2>&1 || true
             sudo apparmor_parser -R hadc_companion/apparmor.txt >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
+          sleep 2
+          if ! docker ps --filter "name=^/hadc-companion-apparmor$" --format '{{.Names}}' | grep -qx hadc-companion-apparmor; then
+            diagnostics
+            exit 1
+          fi
+
           ok=0
-          for attempt in $(seq 1 40); do
+          for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error --insecure https://127.0.0.1:18092/health > .ci-apparmor/health.json; then
               ok=1
               break
             fi
+            if ! docker ps --filter "name=^/hadc-companion-apparmor$" --format '{{.Names}}' | grep -qx hadc-companion-apparmor; then
+              diagnostics
+              exit 1
+            fi
             sleep 1
           done
-          test "$ok" = "1"
+          if [ "$ok" != "1" ]; then
+            diagnostics
+            exit 1
+          fi
 
           if docker exec hadc-companion-apparmor sh -c 'touch /homeassistant/.hadc-write-probe'; then
             echo "ERROR: AppArmor/runtime combination allowed Home Assistant config write." >&2
