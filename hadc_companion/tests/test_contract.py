@@ -12,7 +12,7 @@ class AppContractTests(unittest.TestCase):
         config = (app_root / "config.yaml").read_text(encoding="utf-8")
         apparmor = (app_root / "apparmor.txt").read_text(encoding="utf-8")
 
-        self.assertEqual("0.1.0", APP_VERSION)
+        self.assertEqual("0.1.1", APP_VERSION)
         self.assertEqual(1, PROTOCOL_VERSION)
         self.assertEqual(1, DATA_SCHEMA_VERSION)
         self.assertIn('version: "0.1.1"', config)
