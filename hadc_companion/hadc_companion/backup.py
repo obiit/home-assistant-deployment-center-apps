@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import urllib.error
 import urllib.parse
@@ -94,6 +95,25 @@ class SupervisorBackupClient:
                 "SUPERVISOR_UNREACHABLE",
                 f"Supervisor backup download failed: {exc.reason}",
             ) from exc
+
+    def compute_download_sha256(self, slug: str) -> dict[str, Any]:
+        digest = hashlib.sha256()
+        size = 0
+        response = self.open_download(slug)
+        try:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                size += len(chunk)
+        finally:
+            response.close()
+        return {
+            "slug": slug,
+            "sha256": digest.hexdigest(),
+            "size_bytes": size,
+        }
 
     def _request_json(
         self,
