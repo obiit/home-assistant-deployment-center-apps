@@ -12,10 +12,10 @@ class AppContractTests(unittest.TestCase):
         config = (app_root / "config.yaml").read_text(encoding="utf-8")
         apparmor = (app_root / "apparmor.txt").read_text(encoding="utf-8")
 
-        self.assertEqual("0.1.2", APP_VERSION)
+        self.assertEqual("0.1.3", APP_VERSION)
         self.assertEqual(1, PROTOCOL_VERSION)
         self.assertEqual(1, DATA_SCHEMA_VERSION)
-        self.assertIn('version: "0.1.2"', config)
+        self.assertIn('version: "0.1.3"', config)
         self.assertIn("read_only: true", config)
         self.assertIn("type: homeassistant_config", config)
         self.assertIn('watchdog: "tcp://[HOST]:[PORT:18091]"', config)
@@ -41,6 +41,8 @@ class AppContractTests(unittest.TestCase):
         self.assertIn("/command/** rix,", apparmor)
         self.assertIn("/etc/s6-overlay/** rwix,", apparmor)
         self.assertIn("/run/{,**} rwk,", apparmor)
+        self.assertIn("/opt/hadc-companion/ r,", apparmor)
+        self.assertIn("/opt/hadc-companion/** r,", apparmor)
         self.assertIn("/homeassistant/** r,", apparmor)
         self.assertIn("deny /homeassistant/.storage/** r,", apparmor)
 

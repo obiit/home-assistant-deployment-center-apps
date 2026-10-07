@@ -45,6 +45,8 @@ template:
                 '{"entity_id":"sensor.storage_must_not_scan"}',
                 encoding="utf-8",
             )
+            storage_dir = root / ".storage"
+            storage_dir.chmod(0o000)
             (root / "templates" / "dynamic.jinja").write_text(
                 "{{ states('sensor.' ~ room ~ '_temperatur') }}\n",
                 encoding="utf-8",
@@ -66,7 +68,11 @@ template:
                 encoding="utf-8",
             )
 
-            inventory = ConfigScanner(root).scan()
+            try:
+                inventory = ConfigScanner(root).scan()
+            finally:
+                # Restore access so TemporaryDirectory can clean up.
+                storage_dir.chmod(0o700)
 
             self.assertEqual("COMPLETE_WITH_DECLARED_LIMITATIONS", inventory["status"])
             serialized = json.dumps(inventory, ensure_ascii=False)

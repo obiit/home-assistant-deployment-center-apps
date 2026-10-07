@@ -32,6 +32,10 @@ profile hadc_companion flags=(attach_disconnected,mediate_deleted) {
   /dev/urandom r,
   /tmp/** rwk,
 
+  # Companion application source is interpreted by Python and must be readable.
+  /opt/hadc-companion/ r,
+  /opt/hadc-companion/** r,
+
   # Companion persistent lifecycle state.
   /data/** rwk,
 
