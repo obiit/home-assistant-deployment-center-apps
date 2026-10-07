@@ -1,5 +1,5 @@
 name: HADC Companion
-version: "0.1.3"
+version: "0.2.0"
 slug: hadc_companion
 description: >-
   Read-only companion for Home Assistant Deployment Center. Inventories supported
@@ -12,6 +12,8 @@ init: false
 startup: application
 boot: auto
 homeassistant: "2026.4.0"
+hassio_api: true
+hassio_role: backup
 apparmor: true
 map:
   - type: homeassistant_config

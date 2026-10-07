@@ -30,6 +30,9 @@ jobs:
           test -f repository.yaml
           grep -q 'image: "ghcr.io/obiit/hadc-companion"' hadc_companion/config.yaml
           grep -q 'read_only: true' hadc_companion/config.yaml
+          grep -Fxq 'hassio_api: true' hadc_companion/config.yaml
+          grep -Fxq 'hassio_role: backup' hadc_companion/config.yaml
+          ! grep -Fxq 'homeassistant_api: true' hadc_companion/config.yaml
           ! grep -q '^ARG BUILD_FROM' hadc_companion/Dockerfile
 
   native-container:
@@ -82,6 +85,7 @@ jobs:
           assert h["protocol_version"]==1, h
           assert h["data_schema_version"]==1, h
           assert h["config_access"]=="READ_ONLY", h
+          assert h["backup_checkpoint_available"] is False, h
           PY
           if docker exec hadc-companion-validate sh -c 'touch /homeassistant/.hadc-write-probe'; then
             echo "ERROR: read-only Home Assistant mount accepted a write." >&2

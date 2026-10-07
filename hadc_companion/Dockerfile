@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24-2026.08.0
 
-ARG BUILD_VERSION=0.1.3
+ARG BUILD_VERSION=0.2.0
 ARG BUILD_ARCH=amd64
 
 RUN apk add --no-cache openssl
@@ -21,10 +21,10 @@ LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
     io.hass.name="HADC Companion" \
-    io.hass.description="Read-only companion for Home Assistant Deployment Center" \
+    io.hass.description="Read-only evidence and protected checkpoint companion for Home Assistant Deployment Center" \
     io.hass.url="https://github.com/obiit/home-assistant-deployment-center-apps" \
     org.opencontainers.image.title="HADC Companion" \
-    org.opencontainers.image.description="Read-only Home Assistant configuration inventory service" \
+    org.opencontainers.image.description="Read-only Home Assistant evidence service with least-privilege backup checkpoints" \
     org.opencontainers.image.source="https://github.com/obiit/home-assistant-deployment-center-apps"
 
 EXPOSE 18091

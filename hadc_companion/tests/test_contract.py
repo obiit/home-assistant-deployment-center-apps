@@ -12,22 +12,26 @@ class AppContractTests(unittest.TestCase):
         config = (app_root / "config.yaml").read_text(encoding="utf-8")
         apparmor = (app_root / "apparmor.txt").read_text(encoding="utf-8")
 
-        self.assertEqual("0.1.3", APP_VERSION)
+        self.assertEqual("0.2.0", APP_VERSION)
         self.assertEqual(1, PROTOCOL_VERSION)
         self.assertEqual(1, DATA_SCHEMA_VERSION)
-        self.assertIn('version: "0.1.3"', config)
+        self.assertIn('version: "0.2.0"', config)
         self.assertIn("read_only: true", config)
         self.assertIn("type: homeassistant_config", config)
         self.assertIn('watchdog: "tcp://[HOST]:[PORT:18091]"', config)
         self.assertIn('image: "ghcr.io/obiit/hadc-companion"', config)
 
+        self.assertIn("hassio_api: true", config)
+        self.assertIn("hassio_role: backup", config)
+
         forbidden = (
             "host_network: true",
             "docker_api: true",
             "full_access: true",
-            "hassio_api: true",
             "homeassistant_api: true",
             "host_pid: true",
+            "hassio_role: manager",
+            "hassio_role: admin",
         )
         for value in forbidden:
             self.assertNotIn(value, config)

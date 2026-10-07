@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+Backup & Validation foundation for Desktop 0.1.11.
+
+- Adds Home Assistant Supervisor API access with the dedicated `backup` role only.
+- Keeps Home Assistant configuration mounted read-only.
+- Adds `backup_checkpoint_v1` capability discovery without changing protocol v1 or persistent data schema v1.
+- Adds a narrow authenticated API for backup metadata, protected full checkpoint creation and backup download.
+- HADC checkpoints are compressed, local, database-inclusive and password protected.
+- Companion never persists the checkpoint password.
+- Restore and delete are deliberately not exposed.
+- Keeps Home Assistant API, Docker API, host networking, privileged capabilities and full host access disabled.
+- Adds unit tests for strict checkpoint policy, metadata sanitization, streamed download and path-traversal rejection.
+
 ## 0.1.3
 
 Verified AppArmor runtime compatibility release.
